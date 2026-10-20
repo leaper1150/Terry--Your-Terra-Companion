@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "terry-companion"
+version = "0.1.0"
+description = "Terry — Your Terra Companion"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.28.0",
+    "nicegui>=1.4.0",
+    "pywebview>=4.0.0",
+]
+[project.scripts]
+terry = "terry_companion.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+"terry_companion" = ["assets/*.png"]
