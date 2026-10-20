@@ -83,11 +83,24 @@ def send_webhook(webhook_url, message):
         print(f"Error sending webhook: {e}")
 
 
+def compute_status(logged_hours, goal_hours):
+    now = datetime.datetime.now()
+    days_to_sunday = (6 - now.weekday()) % 7
+    sunday_cutoff = now + datetime.timedelta(days=days_to_sunday).replace(hour=23, minute=59, second=59, microsecond=0)
+    time_left = max(datetime.timedelta(seconds=0), sunday_cutoff - now)
+    hours_left = time_left.total_seconds() / 3600.0
+    days_left = max(0.1, hours_left / 24.0)
+
+    hours_needed = max(0.0, goal_hours - logged_hours)
+    burn_rate = hours_needed / days_left
+    
+
+
 def main():
     cfg = load_config()
     print("Config file is saved at:", CONFIG_FILE)
     hours = fetch_week_hours(cfg)
-    print(f"🦖 You have coded {hours} hours this week!")
+    print(f" You have coded {hours} hours this week!")
 
 if __name__ == "__main__":
     main()
