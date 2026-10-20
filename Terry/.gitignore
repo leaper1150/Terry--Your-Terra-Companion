@@ -1,0 +1,17 @@
+# Ignore the entire virtual environment folder
+venv/
+.venv/
+env/
+
+# Python cache & build files
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Local credentials & system files
+.wakatime.cfg
+*.env
+.DS_Store
