@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import datetime 
-import requests 
+import requests
 import os 
 
 
@@ -46,10 +46,12 @@ def save_config(config):
 def fetch_week_hours(config):
     api_key = config.get("api_key").strip()
     api_url = config.get("api_url").strip().rstrip("/")
+    if not api_key:
+        return 0.0
 
+    # 1. Put the date math & headers back!
     today_datetime = datetime.date.today()
     monday_date = today_datetime - datetime.timedelta(days=today_datetime.weekday())
-
     today_date_str = today_datetime.strftime("%Y-%m-%d")
     monday_date_str = monday_date.strftime("%Y-%m-%d")
 
@@ -58,14 +60,17 @@ def fetch_week_hours(config):
     }
 
     try:
-        response = requests.get(f"{api_url}/users/me/hours?start_date={monday_date_str}&end_date={today_date_str}", headers=headers)
+        url = f"{api_url}/users/current/summaries?start={monday_date_str}&end={today_date_str}"
+        response = requests.get(url, headers=headers, timeout=6)
         response.raise_for_status()
         data = response.json()
-        return data.get("total_hours", 0.0)
+
+        # 2. Replace "total_hours" with Hackatime's seconds -> hours math:
+        total_seconds = data.get("cumulative_total", {}).get("seconds", 0.0)
+        return round(total_seconds / 3600.0, 2)
     except requests.RequestException as e:
         print(f"Error fetching week hours: {e}")
         return 0.0
-
 
 def send_webhook(webhook_url, message):
     payload = {
@@ -75,5 +80,14 @@ def send_webhook(webhook_url, message):
         response = requests.post(webhook_url, json=payload)
         response.raise_for_status()
     except requests.RequestException as e:
-        print(f"Error sending webhook: {e}")    
+        print(f"Error sending webhook: {e}")
 
+
+def main():
+    cfg = load_config()
+    print("Config file is saved at:", CONFIG_FILE)
+    hours = fetch_week_hours(cfg)
+    print(f"🦖 You have coded {hours} hours this week!")
+
+if __name__ == "__main__":
+    main()
