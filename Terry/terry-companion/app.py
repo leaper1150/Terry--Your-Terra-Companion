@@ -3,7 +3,14 @@ from pathlib import Path
 import datetime 
 import requests
 import os 
+import subprocess
+import sys
+import webbrowser
+from nicegui import app, run, ui, Client, events
+import multiprocessing
 
+os.environ["PYWEBVIEW_GUI"] = "qt"
+multiprocessing.set_start_method("fork", force=True)
 
 #this app is for tracking weekly hourse and goals for hackatime to help users win in Terra 
 
@@ -22,6 +29,16 @@ DEFAULT_CONFIG = default_user = {
     "editor_cmd": "code",
     "last_state": "",
 }
+
+
+def get_assets_dir():
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        # Running as a PyInstaller bundle
+        return Path(sys._MEIPASS) / "assets"
+    return Path(__file__).parent / "assets"
+
+
+
 
 def load_config():
     if not CONFIG_FILE.exists():
@@ -48,7 +65,7 @@ def fetch_week_hours(config):
     api_key = config.get("api_key").strip()
     api_url = config.get("api_url").strip().rstrip("/")
     if not api_key:
-        return 0.0
+        return 0.0, 0.0
 
     # 1. Put the date math & headers back!
     today_datetime = datetime.date.today()
@@ -98,6 +115,11 @@ def send_webhook(webhook_url, message):
         print(f"Error sending webhook: {e}")
 
 
+def format_hours(hours):
+    total_minutes = round(hours * 60)
+    h, m = divmod(total_minutes, 60)
+    return f"{h}h {m}m"
+
 def compute_status(week_hours, today_hours, goal_hours, daily_goal):
     now = datetime.datetime.now()
     days_to_sunday = (6 - now.weekday()) % 7
@@ -125,27 +147,27 @@ def compute_status(week_hours, today_hours, goal_hours, daily_goal):
         state = "eviction"
         title = "EVICTION NOTICE HAS BEEN SERVED"
         color = "stone"
-        msg = f"Cooked! You need {week_needed:.2f}h, but only {hours_left_in_week:.2f}h are left this week!"
+        msg = f"Cooked! You need {format_hours(week_needed)}, but only {format_hours(hours_left_in_week)} are left this week!"
     elif hours_left_in_week <= 24.0 and week_needed > 0:
         state = "danger"
         title = "SUNDAY DANGER ZONE LOCK IN PLEASE"
         color = "rose"
-        msg = f"Less than 24h left! Log {week_needed:.2f}h before midnight!"
+        msg = f"Less than 24h left! Log {format_hours(week_needed)} before midnight!"
     elif needed_for_tonight == 0:
         state = "ready"
         title = f"DAY {day_number} QUOTA COMPLETE!"
         color = "emerald"
-        msg = f"You passed Day {day_number}'s target ({expected_by_tonight:.1f}h)! {week_needed:.2f}h left for the week."
+        msg = f"You passed Day {day_number}'s target ({format_hours(expected_by_tonight)})! {format_hours(week_needed)} left for the week."
     elif needed_for_tonight <= (daily_goal / 2):
         state = "safe"
         title = "WARMING ZONE"
         color = "green"
-        msg = f"Almost at Day {day_number}'s {expected_by_tonight:.1f}h target! Just {needed_for_tonight:.2f}h more tonight."
+        msg = f"Almost at Day {day_number}'s {format_hours(expected_by_tonight)} target! Just {format_hours(needed_for_tonight)} more tonight."
     else:
         state = "hurry"
         title = "YOU NEED TO WORK!!"
         color = "amber"
-        msg = f"Log {needed_for_tonight:.2f}h more tonight to reach Day {day_number}'s target of {expected_by_tonight:.1f}h!"
+        msg = f"Log {format_hours(needed_for_tonight)} more tonight to reach Day {day_number}'s target of {format_hours(expected_by_tonight)}!"
 
     return {
         "state": state,
@@ -154,7 +176,7 @@ def compute_status(week_hours, today_hours, goal_hours, daily_goal):
         "msg": msg,
         "expected_by_tonight": expected_by_tonight,
         "needed_for_tonight": needed_for_tonight,
-        "hours_left_str": f"{int(hours_left_in_week)}h {int((hours_left_in_week % 1) * 60)}m",
+        "hours_left_str": format_hours(hours_left_in_week),
     }
 
 def main():
@@ -167,7 +189,111 @@ def main():
     print(f" Terry's Mood: [{status['state'].upper()}] {status['title']}")
     print(f" {status['msg']}")
 
-    
-if __name__ == "__main__":
+#def main():
+    cfg = load_config()
+
+    # Main Desktop Window Layout (Text, Bars & Buttons Only)
+    with ui.element("div").classes(
+        "flex items-center justify-center min-h-screen bg-stone-950 p-4"
+    ):
+        with ui.card().classes(
+            "w-full max-w-sm p-6 bg-stone-900 border-2 border-stone-800 rounded-2xl shadow-xl items-center text-white"
+        ):
+            ui.label("TERRY — TERRA COMPANION").classes(
+                "text-xs font-mono tracking-widest text-stone-400 mb-2"
+            )
+
+            # Status Box (No images, just state text + Terry's message)
+            with ui.card().classes(
+                "w-full bg-stone-950 border border-stone-800 p-4 rounded-xl items-center text-center"
+            ):
+                state_badge = ui.label("STATE: LOADING...").classes(
+                    "text-xs font-mono text-emerald-400 uppercase"
+                )
+                status_title = ui.label("Checking Hackatime...").classes(
+                    "text-base font-bold mt-1"
+                )
+                status_msg = ui.label("").classes(
+                    "text-xs text-stone-400 font-mono mt-1"
+                )
+
+            # 1. TODAY'S QUOTA BAR
+            with ui.row().classes(
+                "w-full justify-between items-center mt-4 text-xs font-mono"
+            ):
+                today_lbl = ui.label("Today: 0.0 / 1.5h")
+                tonight_lbl = ui.label("Need tonight: --").classes("text-emerald-400")
+            today_bar = ui.linear_progress(
+                value=0, size="10px", show_value=False
+            ).classes("w-full rounded-full")
+
+            # 2. WEEKLY QUOTA BAR
+            with ui.row().classes(
+                "w-full justify-between items-center mt-3 text-xs font-mono"
+            ):
+                week_lbl = ui.label("Week: 0.0 / 10.0h")
+                reset_lbl = ui.label("Reset: --").classes("text-stone-400")
+            week_bar = ui.linear_progress(
+                value=0, size="12px", show_value=False
+            ).classes("w-full rounded-full")
+
+            def sync_data(manual=False):
+                week_hours, today_hours = fetch_week_hours(cfg)
+                status = compute_status(
+                    week_hours, today_hours, cfg["goal_hours"], cfg["daily_goal"]
+                )
+
+                state_badge.text = f"STATE: {status['state'].upper()}"
+                status_title.text = status["title"]
+                status_msg.text = status["msg"]
+                today_lbl.text = f"Today: {today_hours:.1f} / {cfg['daily_goal']:.1f}h"
+                tonight_lbl.text = f"Need tonight: {format_hours(status['needed_for_tonight'])}"
+                week_lbl.text = f"Week: {week_hours:.1f} / {cfg['goal_hours']:.1f}h"
+
+                daily_goal = cfg["daily_goal"]
+                weekly_goal = cfg["goal_hours"]
+                today_bar.value = min(today_hours / daily_goal, 1.0) if daily_goal > 0 else 0
+                week_bar.value = min(week_hours / weekly_goal, 1.0) if weekly_goal > 0 else 0
+
+                days_until_reset = 7 - datetime.date.today().weekday()
+                reset_lbl.text = f"Reset: {days_until_reset}d"
+
+            sync_data()
+
+            # 3. BASIC BUTTONS
+            with ui.row().classes("w-full justify-center gap-2 mt-5"):
+                ui.button(
+                    "Water Crops",
+                    on_click=lambda: subprocess.Popen([cfg["editor_cmd"], "."]),
+                ).classes("bg-emerald-600 text-xs px-3")
+
+                ui.button(
+                    "Visit Terra",
+                    on_click=lambda: webbrowser.open("https://terra.hackclub.com"),
+                ).classes("bg-stone-800 text-xs px-3")
+
+                ui.button(
+                    "Sync",
+                    on_click=lambda: sync_data(manual=True),
+                ).classes("bg-stone-800 text-xs px-3")
+                ui.timer(600.0, sync_data)
+
+                ###
+
+    # Start the Native Desktop Window!
+ #   ui.run(
+        title="Terry — Your Terra Companion",
+        dark=True,
+        native=True,
+        window_size=(400, 520),
+        reload=False,
+    )
+
+
+
+
+if __name__ in {"__main__", "__mp_main__"}:
     main()
+
+
 
