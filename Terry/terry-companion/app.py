@@ -6,9 +6,9 @@ import os
 import subprocess
 import sys
 import multiprocessing
-
-os.environ["PYWEBVIEW_GUI"] = "qt"
-multiprocessing.set_start_method("fork", force=True)
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton
+    
 
 #this app is for tracking weekly hourse and goals for hackatime to help users win in Terra 
 
@@ -176,6 +176,8 @@ def compute_status(week_hours, today_hours, goal_hours, daily_goal):
         "needed_for_tonight": needed_for_tonight,
         "hours_left_str": format_hours(hours_left_in_week),
     }
+
+
 
 def main():
     cfg = load_config()
