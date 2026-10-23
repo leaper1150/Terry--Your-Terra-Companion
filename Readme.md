@@ -1,17 +1,41 @@
-Terry- Your helpful terra companion!
+<div align="center">
+  <img src="assets/terry-banner.png" alt="Terry — Your Terra Companion" width="100%">
 
-terry is a fox on your desktop alerting you when :
+  # Terry — Your Terra Companion
 
-1. you dont have enough time logged today
-2. you dont have enough time logged for the week
-3. you do have enough time logged for today
-4. you do have enough time logged for the week
+  **A fox on your desktop to help you keep your Hackatime goals on track.**
+</div>
 
-he's also very cool 
+Terry checks your coding time on [Hackatime](https://hackatime.hackclub.com) and lets you know how you’re doing against your daily and weekly goals. Whether you’re on track or need a little nudge, Terry’s got you.
 
-to use Terry you must go to hackatime.hackclub.com, 
-1. sign in > duh
-2. go to settings
-3. setup
-4. copy your api_key: 
-5. give it to terry (I promise he wont misuse it)
+<div align="center">
+  <img src="assets/terry-mascot.png" alt="Terry the fox" width="240">
+</div>
+
+## What Terry does
+
+- Shows your coding time for today and this week.
+- Tracks your daily and weekly goals.
+- Gives you a status update to help you stay on track.
+
+## Get started
+
+1. Sign in to [Hackatime](https://hackatime.hackclub.com).
+2. Open **Settings** and then **Setup**.
+3. Copy your Hackatime API key.
+4. Launch Terry. The first run creates `~/.terry_companion/config.json`.
+5. Open that file, paste your API key into the `api_key` field, save, and launch Terry again.
+
+For example:
+
+```json
+{
+  "api_key": "YOUR_HACKATIME_API_KEY"
+}
+```
+
+Terry starts with a daily goal of **1.5 hours** and a weekly goal of **10 hours**. You can adjust `daily_goal` and `goal_hours` in the same config file.
+
+## Keep your API key private
+
+Your API key is sensitive. Don’t share it or post it publicly.
